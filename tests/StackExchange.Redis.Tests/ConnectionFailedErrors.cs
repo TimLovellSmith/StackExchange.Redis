@@ -155,30 +155,34 @@ namespace StackExchange.Redis.Tests
         [Fact]
         public async Task CheckFailureRecovered()
         {
-            try
+            // Avoiding blocking the thread a long time during any failures/timeouts
+            await RunTestOnNewThreadAsync(async () =>
             {
-                using (var muxer = Create(keepAlive: 1, connectTimeout: 10000, allowAdmin: true))
+                try
                 {
-                    muxer.GetDatabase();
-                    var server = muxer.GetServer(muxer.GetEndPoints()[0]);
+                    using (var muxer = Create(keepAlive: 1, connectTimeout: 10000, allowAdmin: true))
+                    {
+                        muxer.GetDatabase();
+                        var server = muxer.GetServer(muxer.GetEndPoints()[0]);
 
-                    muxer.AllowConnect = false;
+                        muxer.AllowConnect = false;
 
-                    server.SimulateConnectionFailure();
+                        server.SimulateConnectionFailure();
 
-                    Assert.Equal(ConnectionFailureType.SocketFailure, ((RedisConnectionException)muxer.GetServerSnapshot()[0].LastException).FailureType);
+                        Assert.Equal(ConnectionFailureType.SocketFailure, ((RedisConnectionException)muxer.GetServerSnapshot()[0].LastException).FailureType);
 
-                    // should reconnect within 1 keepalive interval
-                    muxer.AllowConnect = true;
-                    await Task.Delay(2000).ForAwait();
+                        // should reconnect within 1 keepalive interval
+                        muxer.AllowConnect = true;
+                        await Task.Delay(2000).ForAwait();
 
-                    Assert.Null(muxer.GetServerSnapshot()[0].LastException);
+                        Assert.Null(muxer.GetServerSnapshot()[0].LastException);
+                    }
                 }
-            }
-            finally
-            {
-                ClearAmbientFailures();
-            }
+                finally
+                {
+                    ClearAmbientFailures();
+                }
+            });
         }
 #endif
     }

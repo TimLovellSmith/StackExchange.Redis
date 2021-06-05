@@ -16,6 +16,28 @@ namespace StackExchange.Redis.Tests
 {
     public abstract class TestBase : IDisposable
     {
+        /// <summary>
+        /// Used to avoid starving the thread pool / synchronization context during unit tests
+        /// </summary>
+        public async Task RunTestOnNewThreadAsync(Action a)
+        {
+            var tcs = new TaskCompletionSource<int>();
+            var t = new Thread((_) =>
+            {
+                try
+                {
+                    a();
+                    tcs.SetResult(1);
+                }
+                catch (Exception e)
+                {
+                    tcs.SetException(e);
+                }
+            });
+            t.Start();
+            await tcs.Task.ForAwait();
+        }
+
         private ITestOutputHelper Output { get; }
         protected TextWriterOutputHelper Writer { get; }
         protected static bool RunningInCI { get; } = Environment.GetEnvironmentVariable("APPVEYOR") != null;
@@ -324,6 +346,7 @@ namespace StackExchange.Redis.Tests
                 if (checkConnect && (muxer == null || !muxer.IsConnected))
                 {
                     // If fail is true, we throw.
+                    if (fail) Assert.NotNull(muxer);
                     Assert.False(fail, failMessage + "Server is not available");
                     Skip.Inconclusive(failMessage + "Server is not available");
                 }
